@@ -1,7 +1,13 @@
 const router = require('express').Router();
+const md = require("./auth-middleware");
 
-router.post('/register', (req, res) => {
-  res.end('kayıt olmayı ekleyin, lütfen!');
+const { JWT_SECRET } = require("../secrets"); // bu secret'ı kullanın!
+const UserModel = require("../users/users-model");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+router.post('/register', md.usernameBostami, md.sifreGecerlimi,async(req, res,next) => {
+
   /*
     EKLEYİN
     Uçnoktanın işlevselliğine yardımcı olmak için middlewarelar yazabilirsiniz.
@@ -27,10 +33,26 @@ router.post('/register', (req, res) => {
     4- Kullanıcı adı alınmışsa BAŞARISIZ kayıtta,
       şu mesajı içermelidir: "username alınmış".
   */
-});
+      try {
+        const { username, password } = req.body;
+  
+        const hash = bcrypt.hashSync(password, 8);
+        const newUser = await UserModel.ekle({
+          username:username,
+          password:hash,
+        });
+        res.status(201).json(newUser);
+    
+    }
+    catch (err) {
+        next(err);
+      }
+    });
 
-router.post('/login', (req, res) => {
-  res.end('girişi ekleyin, lütfen!');
+
+
+router.post('/login',md.usernamevePasswordVarmi,async (req, res,next) => {
+  // res.end('girişi ekleyin, lütfen!');
   /*
     EKLEYİN
     Uçnoktanın işlevselliğine yardımcı olmak için middlewarelar yazabilirsiniz.
@@ -54,6 +76,35 @@ router.post('/login', (req, res) => {
     4- "username" db de yoksa ya da "password" yanlışsa BAŞARISIZ giriş,
       şu mesajı içermelidir: "geçersiz kriterler".
   */
+      try {
+        const { password } = req.body;
+        const passwordCheck = bcrypt.compareSync(password, req.user.password);
+    
+        if (passwordCheck) {
+          const jwtToken = jwt.sign(
+            {
+              subject: req.user.id,
+              username: req.user.username,
+            
+            },
+            JWT_SECRET,
+            { expiresIn: "1d" }
+          );
+    
+          res.status(200).json({
+            success: true,
+            token: jwtToken,
+            message: `${req.user.username} geri geldi!`,
+        });
+    
+        } else {
+          next();
+        }
+      } catch (err) {
+        next(err);
+      }
 });
+
+
 
 module.exports = router;
